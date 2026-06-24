@@ -1,0 +1,378 @@
+From 0000000000000000000000000000000000000009 Mon Sep 17 00:00:00 2001
+From: local-loongarch64-adaptation <local@example.invalid>
+Date: Wed, 24 Jun 2026 10:45:00 +0800
+Subject: [PATCH] crate_universe: add loongarch64 vendored cfg selects
+
+Reason:
+0008 makes the checked-in crate_universe vendored crates compatible with the
+LoongArch64 platform, but several generated BUILD files also contain
+platform-specific select() expressions for dependencies and crate features.
+
+On loongarch64-unknown-linux-gnu these selects must not fall through to their
+default empty branch when the corresponding Rust cfg is a generic Unix/Linux
+condition. The observed failure in getrandom-0.2.10 is one example: the crate
+compiles Unix libc code, but its generated Bazel deps did not select libc for
+LoongArch64.
+
+Add loongarch64-unknown-linux-gnu to the generic Unix/Linux/not-windows
+vendored select() branches. Do not copy branches whose cfg is explicitly for
+other CPU architectures such as aarch64, x86, or x86_64.
+
+diff --git a/crate_universe/3rdparty/crates/BUILD.bitflags-2.4.1.bazel b/crate_universe/3rdparty/crates/BUILD.bitflags-2.4.1.bazel
+index 6ceb2d6be..92e2da126 100644
+--- a/crate_universe/3rdparty/crates/BUILD.bitflags-2.4.1.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.bitflags-2.4.1.bazel
+@@ -47,6 +47,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "std",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "std",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "std",  # aarch64-unknown-nixos-gnu
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.chrono-0.4.26.bazel b/crate_universe/3rdparty/crates/BUILD.chrono-0.4.26.bazel
+index 54296d293..4e7b67a52 100644
+--- a/crate_universe/3rdparty/crates/BUILD.chrono-0.4.26.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.chrono-0.4.26.bazel
+@@ -110,6 +110,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__iana-time-zone-0.1.57//:iana_time_zone",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__iana-time-zone-0.1.57//:iana_time_zone",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__iana-time-zone-0.1.57//:iana_time_zone",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.errno-0.3.1.bazel b/crate_universe/3rdparty/crates/BUILD.errno-0.3.1.bazel
+index b9b895dde..ea985ea7e 100644
+--- a/crate_universe/3rdparty/crates/BUILD.errno-0.3.1.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.errno-0.3.1.bazel
+@@ -158,6 +158,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.filetime-0.2.22.bazel b/crate_universe/3rdparty/crates/BUILD.filetime-0.2.22.bazel
+index ea2748ff6..0af4061fc 100644
+--- a/crate_universe/3rdparty/crates/BUILD.filetime-0.2.22.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.filetime-0.2.22.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.getrandom-0.2.10.bazel b/crate_universe/3rdparty/crates/BUILD.getrandom-0.2.10.bazel
+index 38f0f59a2..576ba47a1 100644
+--- a/crate_universe/3rdparty/crates/BUILD.getrandom-0.2.10.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.getrandom-0.2.10.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-config-value-0.14.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-config-value-0.14.0.bazel
+index 00c243080..b4298df88 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-config-value-0.14.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-config-value-0.14.0.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-features-0.35.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-features-0.35.0.bazel
+index f00ce1bfc..d8b0dfd6c 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-features-0.35.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-features-0.35.0.bazel
+@@ -123,6 +123,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-pack-0.43.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-pack-0.43.0.bazel
+index fcb44a440..f886d6b80 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-pack-0.43.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-pack-0.43.0.bazel
+@@ -120,6 +120,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__gix-tempfile-10.0.0//:gix_tempfile",  # cfg(not(target_arch = "wasm32"))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__gix-tempfile-10.0.0//:gix_tempfile",  # cfg(not(target_arch = "wasm32"))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__gix-tempfile-10.0.0//:gix_tempfile",  # cfg(not(target_arch = "wasm32"))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-path-0.10.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-path-0.10.0.bazel
+index ee4231ede..a270525f9 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-path-0.10.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-path-0.10.0.bazel
+@@ -106,6 +106,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__home-0.5.5//:home",  # cfg(not(target_family = "wasm"))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__home-0.5.5//:home",  # cfg(not(target_family = "wasm"))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__home-0.5.5//:home",  # cfg(not(target_family = "wasm"))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-prompt-0.7.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-prompt-0.7.0.bazel
+index d63b4a1ea..d929a4985 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-prompt-0.7.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-prompt-0.7.0.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__rustix-0.38.21//:rustix",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__rustix-0.38.21//:rustix",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__rustix-0.38.21//:rustix",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-sec-0.10.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-sec-0.10.0.bazel
+index 5827df92f..47480f64c 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-sec-0.10.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-sec-0.10.0.bazel
+@@ -104,6 +104,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.gix-tempfile-10.0.0.bazel b/crate_universe/3rdparty/crates/BUILD.gix-tempfile-10.0.0.bazel
+index ad9c6f160..43b0c07c6 100644
+--- a/crate_universe/3rdparty/crates/BUILD.gix-tempfile-10.0.0.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.gix-tempfile-10.0.0.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.io-lifetimes-1.0.11.bazel b/crate_universe/3rdparty/crates/BUILD.io-lifetimes-1.0.11.bazel
+index 640451b2c..827768c4c 100644
+--- a/crate_universe/3rdparty/crates/BUILD.io-lifetimes-1.0.11.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.io-lifetimes-1.0.11.bazel
+@@ -111,6 +111,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(not(windows))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.is-terminal-0.4.7.bazel b/crate_universe/3rdparty/crates/BUILD.is-terminal-0.4.7.bazel
+index 69dc349ab..b57573269 100644
+--- a/crate_universe/3rdparty/crates/BUILD.is-terminal-0.4.7.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.is-terminal-0.4.7.bazel
+@@ -103,6 +103,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__rustix-0.37.23//:rustix",  # cfg(not(any(windows, target_os = "hermit", target_os = "unknown")))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__rustix-0.37.23//:rustix",  # cfg(not(any(windows, target_os = "hermit", target_os = "unknown")))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__rustix-0.37.23//:rustix",  # cfg(not(any(windows, target_os = "hermit", target_os = "unknown")))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.libc-0.2.149.bazel b/crate_universe/3rdparty/crates/BUILD.libc-0.2.149.bazel
+index f673978a0..5674e61db 100644
+--- a/crate_universe/3rdparty/crates/BUILD.libc-0.2.149.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.libc-0.2.149.bazel
+@@ -51,6 +51,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "extra_traits",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "extra_traits",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "extra_traits",  # aarch64-unknown-nixos-gnu
+         ],
+@@ -209,6 +212,9 @@ cargo_build_script(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "extra_traits",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "extra_traits",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "extra_traits",  # aarch64-unknown-nixos-gnu
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.3.8.bazel b/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.3.8.bazel
+index 097db0274..413501ffc 100644
+--- a/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.3.8.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.3.8.bazel
+@@ -36,6 +36,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "errno",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "errno",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "errno",  # aarch64-unknown-nixos-gnu
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.4.10.bazel b/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.4.10.bazel
+index 92cee5675..b49dfa2a4 100644
+--- a/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.4.10.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.linux-raw-sys-0.4.10.bazel
+@@ -37,6 +37,10 @@ rust_library(
+             "elf",  # aarch64-unknown-linux-gnu
+             "errno",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "elf",  # loongarch64-unknown-linux-gnu
++            "errno",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "elf",  # aarch64-unknown-nixos-gnu
+             "errno",  # aarch64-unknown-nixos-gnu
+diff --git a/crate_universe/3rdparty/crates/BUILD.memmap2-0.7.1.bazel b/crate_universe/3rdparty/crates/BUILD.memmap2-0.7.1.bazel
+index 54b46ca8c..56cac356f 100644
+--- a/crate_universe/3rdparty/crates/BUILD.memmap2-0.7.1.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.memmap2-0.7.1.bazel
+@@ -98,6 +98,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.parking_lot_core-0.9.9.bazel b/crate_universe/3rdparty/crates/BUILD.parking_lot_core-0.9.9.bazel
+index bc1abf2b9..4d1350c75 100644
+--- a/crate_universe/3rdparty/crates/BUILD.parking_lot_core-0.9.9.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.parking_lot_core-0.9.9.bazel
+@@ -106,6 +106,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.rand-0.4.6.bazel b/crate_universe/3rdparty/crates/BUILD.rand-0.4.6.bazel
+index 5e681d416..7940477db 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rand-0.4.6.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rand-0.4.6.bazel
+@@ -107,6 +107,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.rand-0.8.5.bazel b/crate_universe/3rdparty/crates/BUILD.rand-0.8.5.bazel
+index 0af1145e3..767dcc357 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rand-0.8.5.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rand-0.8.5.bazel
+@@ -111,6 +111,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(unix)
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(unix)
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+index a2bcbb45b..b6cb5762b 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+@@ -138,6 +138,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "termios",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+@@ -419,6 +422,9 @@ cargo_build_script(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "termios",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.tempfile-3.8.1.bazel b/crate_universe/3rdparty/crates/BUILD.tempfile-3.8.1.bazel
+index 413f9a9d7..4712bc722 100644
+--- a/crate_universe/3rdparty/crates/BUILD.tempfile-3.8.1.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.tempfile-3.8.1.bazel
+@@ -104,6 +104,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "@cui__rustix-0.38.21//:rustix",  # cfg(any(unix, target_os = "wasi"))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__rustix-0.38.21//:rustix",  # cfg(any(unix, target_os = "wasi"))
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__rustix-0.38.21//:rustix",  # cfg(any(unix, target_os = "wasi"))
+         ],
+diff --git a/crate_universe/3rdparty/crates/BUILD.time-0.3.30.bazel b/crate_universe/3rdparty/crates/BUILD.time-0.3.30.bazel
+index 0a1c60522..8ceea2f0f 100644
+--- a/crate_universe/3rdparty/crates/BUILD.time-0.3.30.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.time-0.3.30.bazel
+@@ -120,6 +120,10 @@ rust_library(
+             "@cui__libc-0.2.149//:libc",  # cfg(target_family = "unix")
+             "@cui__num_threads-0.1.6//:num_threads",  # cfg(target_family = "unix")
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__libc-0.2.149//:libc",  # cfg(target_family = "unix")
++            "@cui__num_threads-0.1.6//:num_threads",  # cfg(target_family = "unix")
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "@cui__libc-0.2.149//:libc",  # cfg(target_family = "unix")
+             "@cui__num_threads-0.1.6//:num_threads",  # cfg(target_family = "unix")

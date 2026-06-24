@@ -1,0 +1,243 @@
+diff --git a/loongarch64_adaptation/README.md b/loongarch64_adaptation/README.md
+index 6cf7c7ac..3f4f3a12 100644
+--- a/loongarch64_adaptation/README.md
++++ b/loongarch64_adaptation/README.md
+@@ -56,5 +56,18 @@ This follow-up makes the smoke workspace declare an explicit `//:loongarch64_lin
+ 
+ Reason: the smoke workspace should not depend on Bazel's implicit host/default platforms carrying `@platforms//cpu:loongarch64`. The Rust toolchains registered by rules_rust are constraint-based on both execution and target platforms, so the test must provide platform constraints that match the LoongArch64 toolchain.
+ 
++## Stage 6: External WORKSPACE Smoke Workspace
++
++`0007-add-loongarch64-workspace-smoke-workspace.patch`
++
++This adds `loongarch64_adaptation/smoke_workspace`, a small external WORKSPACE-mode project that uses a local repository back to the patched rules_rust checkout. It validates the legacy macro path after the Bzlmod path:
++- `rules_rust_dependencies()`;
++- `rust_register_toolchains()`;
++- `crate_universe_dependencies(bootstrap = True)`;
++- `crates_repository()` with `supported_platform_triples = ["loongarch64-unknown-linux-gnu"]`;
++- `rust_library`, `rust_test`, `rust_binary`, and `cargo_build_script`.
++
++Reason: rules_rust 0.42.1 still supports WORKSPACE users. The earlier `package_metadata` fix specifically affects WORKSPACE-mode dependency setup after upgrading `platforms` to 1.1.0, so this path needs an explicit external validation.
++
+ ## LoongArch64 Verification
+ 
+@@ -65,22 +78,21 @@ Run these on a LoongArch64 Linux machine after applying `0003` to rules_rust 0.4
+ git apply loongarch64_adaptation/0004-loongarch64-followup-test-and-platforms-deps.patch
+ git apply loongarch64_adaptation/0005-add-loongarch64-bzlmod-smoke-workspace.patch
+ git apply loongarch64_adaptation/0006-loongarch64-smoke-explicit-platform.patch
++git apply loongarch64_adaptation/0007-add-loongarch64-workspace-smoke-workspace.patch
+ 
+ bazel test //test/unit/platform_triple:all
+ bazel test //test/load_arbitrary_tool:all
+ bazel test //crate_universe:all
+ 
+ cd loongarch64_adaptation/smoke_bzlmod
+ bazel sync
+ bazel test //:smoke_test --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
+ bazel run //:smoke_bin --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
+-```
+-
+-Then create a small external workspace that depends on the patched rules_rust and run:
+ 
+-```bash
++cd ../smoke_workspace
++CARGO_BAZEL_REPIN=1 CARGO_BAZEL_REPIN_ONLY=crates bazel sync --only=crates
+ bazel sync
+-bazel build //:hello
+-bazel test //:hello_test
++bazel test //:smoke_test
++bazel run //:smoke_bin
+ ```
+ 
+ Expected result: repository setup should detect `loongarch64-unknown-linux-gnu`, download Rust 1.77.2 LoongArch64 host tools and stdlib, and resolve the Rust toolchain for a LoongArch64 Linux target.
+diff --git a/loongarch64_adaptation/smoke_workspace/.bazelrc b/loongarch64_adaptation/smoke_workspace/.bazelrc
+new file mode 100644
+index 00000000..18a4ba77
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/.bazelrc
+@@ -0,0 +1,3 @@
++build --host_platform=//:loongarch64_linux
++build --platforms=//:loongarch64_linux
++build --extra_execution_platforms=//:loongarch64_linux
+diff --git a/loongarch64_adaptation/smoke_workspace/BUILD.bazel b/loongarch64_adaptation/smoke_workspace/BUILD.bazel
+new file mode 100644
+index 00000000..9da90fa3
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/BUILD.bazel
+@@ -0,0 +1,39 @@
++load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
++load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
++
++platform(
++    name = "loongarch64_linux",
++    constraint_values = [
++        "@platforms//cpu:loongarch64",
++        "@platforms//os:linux",
++    ],
++)
++
++cargo_build_script(
++    name = "build_script",
++    srcs = ["build.rs"],
++    edition = "2021",
++)
++
++rust_library(
++    name = "smoke_lib",
++    srcs = ["src/lib.rs"],
++    edition = "2021",
++    deps = [
++        ":build_script",
++        "@crates//:itoa",
++    ],
++)
++
++rust_binary(
++    name = "smoke_bin",
++    srcs = ["src/main.rs"],
++    edition = "2021",
++    deps = [":smoke_lib"],
++)
++
++rust_test(
++    name = "smoke_test",
++    crate = ":smoke_lib",
++    edition = "2021",
++)
+diff --git a/loongarch64_adaptation/smoke_workspace/Cargo.Bazel.lock b/loongarch64_adaptation/smoke_workspace/Cargo.Bazel.lock
+new file mode 100644
+index 00000000..8b137891
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/Cargo.Bazel.lock
+@@ -0,0 +1 @@
++
+diff --git a/loongarch64_adaptation/smoke_workspace/README.md b/loongarch64_adaptation/smoke_workspace/README.md
+new file mode 100644
+index 00000000..44a02a6d
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/README.md
+@@ -0,0 +1,32 @@
++# LoongArch64 WORKSPACE Smoke Workspace
++
++Run this workspace from inside a patched `rules_rust` checkout:
++
++```bash
++cd loongarch64_adaptation/smoke_workspace
++CARGO_BAZEL_REPIN=1 CARGO_BAZEL_REPIN_ONLY=crates bazel sync --only=crates
++bazel sync
++bazel test //:smoke_test
++bazel run //:smoke_bin
++```
++
++The first command is expected to populate `Cargo.Bazel.lock` and `cargo-bazel-lock.json`. They are committed as placeholder files because `crates_repository` requires the lockfile paths to exist before the first repin.
++
++Expected `bazel run` output:
++
++```text
++loongarch64-workspace-smoke:64
++```
++
++This validates:
++- WORKSPACE-mode `rules_rust_dependencies()`;
++- WORKSPACE-mode `rust_register_toolchains()` on a LoongArch64 host;
++- `crate_universe_dependencies(bootstrap = True)` building `cargo-bazel` on LoongArch64;
++- `crates_repository` with `supported_platform_triples = ["loongarch64-unknown-linux-gnu"]`;
++- `rust_library`, `rust_test`, `rust_binary`, and `cargo_build_script`.
++
++If toolchain resolution fails, rerun the test with:
++
++```bash
++bazel test //:smoke_test --toolchain_resolution_debug='@rules_rust//rust:toolchain_type'
++```
+diff --git a/loongarch64_adaptation/smoke_workspace/WORKSPACE.bazel b/loongarch64_adaptation/smoke_workspace/WORKSPACE.bazel
+new file mode 100644
+index 00000000..9065fe64
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/WORKSPACE.bazel
+@@ -0,0 +1,42 @@
++workspace(name = "rules_rust_loongarch64_workspace_smoke")
++
++# This smoke workspace is intended to be run from
++# rules_rust/loongarch64_adaptation/smoke_workspace, so ../.. points at the
++# patched rules_rust checkout under validation.
++local_repository(
++    name = "rules_rust",
++    path = "../..",
++)
++
++load("@rules_rust//rust:repositories.bzl", "rules_rust_dependencies", "rust_register_toolchains")
++
++rules_rust_dependencies()
++
++rust_register_toolchains(
++    edition = "2021",
++)
++
++load("@rules_rust//crate_universe:repositories.bzl", "crate_universe_dependencies")
++
++crate_universe_dependencies(bootstrap = True)
++
++load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository")
++
++crates_repository(
++    name = "crates",
++    cargo_lockfile = "//:Cargo.Bazel.lock",
++    generator = "@cargo_bazel_bootstrap//:cargo-bazel",
++    lockfile = "//:cargo-bazel-lock.json",
++    packages = {
++        "itoa": crate.spec(
++            version = "1.0.10",
++        ),
++    },
++    supported_platform_triples = [
++        "loongarch64-unknown-linux-gnu",
++    ],
++)
++
++load("@crates//:defs.bzl", "crate_repositories")
++
++crate_repositories()
+diff --git a/loongarch64_adaptation/smoke_workspace/build.rs b/loongarch64_adaptation/smoke_workspace/build.rs
+new file mode 100644
+index 00000000..e80c8e42
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/build.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    println!("cargo:rustc-env=FROM_BUILD_SCRIPT=loongarch64-workspace-smoke");
++}
+diff --git a/loongarch64_adaptation/smoke_workspace/cargo-bazel-lock.json b/loongarch64_adaptation/smoke_workspace/cargo-bazel-lock.json
+new file mode 100644
+index 00000000..8b137891
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/cargo-bazel-lock.json
+@@ -0,0 +1 @@
++
+diff --git a/loongarch64_adaptation/smoke_workspace/src/lib.rs b/loongarch64_adaptation/smoke_workspace/src/lib.rs
+new file mode 100644
+index 00000000..718ae8b9
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/src/lib.rs
+@@ -0,0 +1,12 @@
++pub fn render(value: u64) -> String {
++    let mut buffer = itoa::Buffer::new();
++    format!("{}:{}", env!("FROM_BUILD_SCRIPT"), buffer.format(value))
++}
++
++#[cfg(test)]
++mod tests {
++    #[test]
++    fn render_uses_build_script_env_and_third_party_crate() {
++        assert_eq!("loongarch64-workspace-smoke:42", crate::render(42));
++    }
++}
++}
+diff --git a/loongarch64_adaptation/smoke_workspace/src/main.rs b/loongarch64_adaptation/smoke_workspace/src/main.rs
+new file mode 100644
+index 00000000..921bf33f
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_workspace/src/main.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    println!("{}", smoke_lib::render(64));
++}

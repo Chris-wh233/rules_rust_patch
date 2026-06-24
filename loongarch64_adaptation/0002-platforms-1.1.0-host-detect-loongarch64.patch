@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000002 Mon Sep 17 00:00:00 2001
+From: local-loongarch64-adaptation <local@example.invalid>
+Date: Tue, 23 Jun 2026 11:11:00 +0800
+Subject: [PATCH] platforms 1.1.0: map LoongArch host CPU
+
+Reason:
+platforms 1.1.0 already contains @platforms//cpu:loongarch64, but
+host/extension.bzl still does not translate repository_ctx.os.arch values
+for LoongArch. If a workspace uses @platforms//host to derive host
+constraints on a LoongArch64 Linux machine, the generated host constraints
+would omit the CPU constraint.
+
+This patch is not strictly required by rules_rust after its own
+get_host_triple() is fixed, but it completes the external platforms layer
+for workspaces that rely on @platforms//host.
+
+diff --git a/host/extension.bzl b/host/extension.bzl
+index 69410cd..77d5e4b 100644
+--- a/host/extension.bzl
++++ b/host/extension.bzl
+@@ -17,6 +17,8 @@ def _translate_cpu(arch):
+         return "mips64"
+     if arch in ["riscv64"]:
+         return "riscv64"
++    if arch in ["loongarch64", "loong64"]:
++        return "loongarch64"
+     return None
+ 
+ def _translate_os(os):

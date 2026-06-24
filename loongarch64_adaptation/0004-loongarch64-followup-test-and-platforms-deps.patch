@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000004 Mon Sep 17 00:00:00 2001
+From: local-loongarch64-adaptation <local@example.invalid>
+Date: Tue, 23 Jun 2026 14:35:00 +0800
+Subject: [PATCH] loongarch64: fix load_arbitrary_tool test and platforms deps
+
+Reason:
+After 0003, LoongArch64 hosts can reach tests that previously only ran on
+older Tier-1 host triples. The load_arbitrary_tool fixture hard-coded Rust
+1.53.0, but that release predates loongarch64 host artifacts, causing a
+404 for cargo-1.53.0-loongarch64-unknown-linux-gnu.tar.xz. Use the
+rules_rust default Rust version for LoongArch64 while preserving the old
+fixture version for existing hosts.
+
+Also, 0003 upgrades @platforms to 1.1.0. That release's root BUILD file
+loads @package_metadata, so WORKSPACE-mode users of rules_rust_dependencies()
+must define package_metadata before @platforms can be analyzed.
+
+diff --git a/rust/repositories.bzl b/rust/repositories.bzl
+index ee5716490..6db3ab4ff 100644
+--- a/rust/repositories.bzl
++++ b/rust/repositories.bzl
+@@ -48,6 +48,16 @@ DEFAULT_TOOLCHAIN_TRIPLES = {
+ def rules_rust_dependencies():
+     """Dependencies used in the implementation of `rules_rust`."""
+ 
++    maybe(
++        http_archive,
++        name = "package_metadata",
++        sha256 = "0e89367f1cb6d93a5a1afea4b55b11ea6b28f63f653b47154153677ca7d4afea",
++        strip_prefix = "supply-chain-0.0.3/metadata",
++        urls = [
++            "https://mirror.bazel.build/github.com/bazel-contrib/supply-chain/releases/download/v0.0.3/supply-chain-v0.0.3.tar.gz",
++            "https://github.com/bazel-contrib/supply-chain/releases/download/v0.0.3/supply-chain-v0.0.3.tar.gz",
++        ],
++    )
+     maybe(
+         http_archive,
+         name = "platforms",
+diff --git a/test/load_arbitrary_tool/load_arbitrary_tool_test.bzl b/test/load_arbitrary_tool/load_arbitrary_tool_test.bzl
+index f0421f30d..cd25338af 100644
+--- a/test/load_arbitrary_tool/load_arbitrary_tool_test.bzl
++++ b/test/load_arbitrary_tool/load_arbitrary_tool_test.bzl
+@@ -7,13 +7,20 @@ load("//rust/platform:triple_mappings.bzl", "system_to_binary_ext")
+ def _load_arbitrary_tool_test_impl(repository_ctx):
+     host_triple = get_host_triple(repository_ctx)
+     cargo_bin = "bin/cargo" + system_to_binary_ext(host_triple.system)
++    cargo_version = "1.53.0"
++
++    # Rust 1.53.0 predates the loongarch64 host artifacts, so keep the
++    # original fixture version for existing hosts and use the rules_rust
++    # default Rust version for LoongArch64.
++    if host_triple.arch == "loongarch64":
++        cargo_version = "1.77.2"
+ 
+     # Download cargo
+     load_arbitrary_tool(
+         ctx = repository_ctx,
+         tool_name = "cargo",
+         tool_subdirectories = ["cargo"],
+-        version = "1.53.0",
++        version = cargo_version,
+         iso_date = None,
+         target_triple = host_triple,
+     )

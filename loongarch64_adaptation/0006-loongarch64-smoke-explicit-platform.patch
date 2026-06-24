@@ -1,0 +1,91 @@
+diff --git a/loongarch64_adaptation/README.md b/loongarch64_adaptation/README.md
+index 36d4a4c1..6cf7c7ac 100644
+--- a/loongarch64_adaptation/README.md
++++ b/loongarch64_adaptation/README.md
+@@ -54,6 +54,12 @@ This adds `loongarch64_adaptation/smoke_bzlmod`, a small external workspace that
+ - `cargo_build_script` execution and `cargo:rustc-env` propagation;
+ - `crate_universe.from_specs` with a third-party crate.
+ 
++`0006-loongarch64-smoke-explicit-platform.patch`
++
++This follow-up makes the smoke workspace declare an explicit `//:loongarch64_linux` platform and adds a local `.bazelrc` that sets the LoongArch64 host, target, and execution platforms.
++
++Reason: the smoke workspace should not depend on Bazel's implicit host/default platforms carrying `@platforms//cpu:loongarch64`. The Rust toolchains registered by rules_rust are constraint-based on both execution and target platforms, so the test must provide platform constraints that match the LoongArch64 toolchain.
++
+ ## LoongArch64 Verification
+ 
+ Run these on a LoongArch64 Linux machine after applying `0003` to rules_rust 0.42.1:
+@@ -63,6 +69,7 @@ Run these on a LoongArch64 Linux machine after applying `0003` to rules_rust 0.4
+ git apply loongarch64_adaptation/0003-rules_rust-0.42.1-loongarch64.patch
+ git apply loongarch64_adaptation/0004-loongarch64-followup-test-and-platforms-deps.patch
+ git apply loongarch64_adaptation/0005-add-loongarch64-bzlmod-smoke-workspace.patch
++git apply loongarch64_adaptation/0006-loongarch64-smoke-explicit-platform.patch
+ 
+ bazel test //test/unit/platform_triple:all
+ bazel test //test/load_arbitrary_tool:all
+@@ -71,7 +78,7 @@ bazel test //crate_universe:all
+ cd loongarch64_adaptation/smoke_bzlmod
+ bazel sync
+-bazel test //:smoke_test
+-bazel run //:smoke_bin
++bazel test //:smoke_test --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
++bazel run //:smoke_bin --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
+ ```
+ 
+ Then create a small external workspace that depends on the patched rules_rust and run:
+diff --git a/loongarch64_adaptation/smoke_bzlmod/.bazelrc b/loongarch64_adaptation/smoke_bzlmod/.bazelrc
+new file mode 100644
+index 00000000..18a4ba77
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/.bazelrc
+@@ -0,0 +1,3 @@
++build --host_platform=//:loongarch64_linux
++build --platforms=//:loongarch64_linux
++build --extra_execution_platforms=//:loongarch64_linux
+diff --git a/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel b/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel
+index e9fa5aa5..9da90fa3 100644
+--- a/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel
++++ b/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel
+@@ -1,6 +1,14 @@
+ load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+ 
++platform(
++    name = "loongarch64_linux",
++    constraint_values = [
++        "@platforms//cpu:loongarch64",
++        "@platforms//os:linux",
++    ],
++)
++
+ cargo_build_script(
+     name = "build_script",
+     srcs = ["build.rs"],
+diff --git a/loongarch64_adaptation/smoke_bzlmod/README.md b/loongarch64_adaptation/smoke_bzlmod/README.md
+index 5833e5b1..e93b17df 100644
+--- a/loongarch64_adaptation/smoke_bzlmod/README.md
++++ b/loongarch64_adaptation/smoke_bzlmod/README.md
+@@ -5,10 +5,12 @@ Run this workspace from inside a patched `rules_rust` checkout:
+ ```bash
+ cd loongarch64_adaptation/smoke_bzlmod
+ bazel sync
+-bazel test //:smoke_test
+-bazel run //:smoke_bin
++bazel test //:smoke_test --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
++bazel run //:smoke_bin --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux
+ ```
+ 
++The workspace `.bazelrc` sets the same LoongArch64 host, target, and execution platform constraints, so `bazel test //:smoke_test` should also work after this patch.
++
+ Expected `bazel run` output:
+ 
+ ```text
+@@ -22,2 +24,8 @@ This validates:
+ - `cargo_build_script` execution and `cargo:rustc-env` propagation;
+ - `crate_universe` `from_specs` for a third-party crate on `loongarch64-unknown-linux-gnu`.
++
++If toolchain resolution still fails, rerun the test with:
++
++```bash
++bazel test //:smoke_test --host_platform=//:loongarch64_linux --platforms=//:loongarch64_linux --toolchain_resolution_debug='@@rules_rust~//rust:toolchain_type'
++```

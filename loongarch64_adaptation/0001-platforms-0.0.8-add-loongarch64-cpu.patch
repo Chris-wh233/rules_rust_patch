@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
+From: local-loongarch64-adaptation <local@example.invalid>
+Date: Tue, 23 Jun 2026 11:10:00 +0800
+Subject: [PATCH] platforms 0.0.8: add loongarch64 CPU constraint
+
+Reason:
+rules_rust 0.42.1 originally depends on bazelbuild/platforms 0.0.8.
+That release has no @platforms//cpu:loongarch64 constraint, so any
+rules_rust mapping from the Rust triple loongarch64-unknown-linux-gnu to
+Bazel constraints cannot resolve.
+
+This is a minimal backport of bazelbuild/platforms commit
+dbae6fcce51b11029fe8d41c34747dffc0b85715. It is only needed if you must
+stay on platforms 0.0.8 instead of upgrading to platforms 1.1.0.
+
+diff --git a/cpu/BUILD b/cpu/BUILD
+index 6497452..e7afb92 100644
+--- a/cpu/BUILD
++++ b/cpu/BUILD
+@@ -188,3 +188,8 @@ constraint_value(
+     name = "riscv64",
+     constraint_setting = ":cpu",
+ )
++
++constraint_value(
++    name = "loongarch64",
++    constraint_setting = ":cpu",
++)

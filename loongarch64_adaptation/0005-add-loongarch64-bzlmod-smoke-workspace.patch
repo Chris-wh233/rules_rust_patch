@@ -1,0 +1,143 @@
+diff --git a/loongarch64_adaptation/smoke_bzlmod/MODULE.bazel b/loongarch64_adaptation/smoke_bzlmod/MODULE.bazel
+new file mode 100644
+index 000000000..9c525a9e5
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/MODULE.bazel
+@@ -0,0 +1,35 @@
++module(
++    name = "rules_rust_loongarch64_smoke",
++    version = "0.0.0",
++)
++
++bazel_dep(
++    name = "rules_rust",
++    version = "0.42.1",
++)
++
++# This smoke workspace is intended to be run from
++# rules_rust/loongarch64_adaptation/smoke_bzlmod, so ../.. points at the
++# patched rules_rust checkout under validation.
++local_path_override(
++    module_name = "rules_rust",
++    path = "../..",
++)
++
++rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
++rust.toolchain(edition = "2021")
++use_repo(rust, "rust_toolchains")
++
++register_toolchains("@rust_toolchains//:all")
++
++crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
++crate.spec(
++    package = "itoa",
++    version = "1.0.10",
++)
++crate.from_specs(
++    supported_platform_triples = [
++        "loongarch64-unknown-linux-gnu",
++    ],
++)
++use_repo(crate, "crates")
+diff --git a/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel b/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel
+new file mode 100644
+index 000000000..e9fa5aa56
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/BUILD.bazel
+@@ -0,0 +1,31 @@
++load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
++load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
++
++cargo_build_script(
++    name = "build_script",
++    srcs = ["build.rs"],
++    edition = "2021",
++)
++
++rust_library(
++    name = "smoke_lib",
++    srcs = ["src/lib.rs"],
++    edition = "2021",
++    deps = [
++        ":build_script",
++        "@crates//:itoa",
++    ],
++)
++
++rust_binary(
++    name = "smoke_bin",
++    srcs = ["src/main.rs"],
++    edition = "2021",
++    deps = [":smoke_lib"],
++)
++
++rust_test(
++    name = "smoke_test",
++    crate = ":smoke_lib",
++    edition = "2021",
++)
+diff --git a/loongarch64_adaptation/smoke_bzlmod/build.rs b/loongarch64_adaptation/smoke_bzlmod/build.rs
+new file mode 100644
+index 000000000..d47dd308d
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/build.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    println!("cargo:rustc-env=FROM_BUILD_SCRIPT=loongarch64-smoke");
++}
+diff --git a/loongarch64_adaptation/smoke_bzlmod/src/lib.rs b/loongarch64_adaptation/smoke_bzlmod/src/lib.rs
+new file mode 100644
+index 000000000..606a6393f
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/src/lib.rs
+@@ -0,0 +1,12 @@
++pub fn render(value: u64) -> String {
++    let mut buffer = itoa::Buffer::new();
++    format!("{}:{}", env!("FROM_BUILD_SCRIPT"), buffer.format(value))
++}
++
++#[cfg(test)]
++mod tests {
++    #[test]
++    fn render_uses_build_script_env_and_third_party_crate() {
++        assert_eq!("loongarch64-smoke:42", crate::render(42));
++    }
++}
+diff --git a/loongarch64_adaptation/smoke_bzlmod/src/main.rs b/loongarch64_adaptation/smoke_bzlmod/src/main.rs
+new file mode 100644
+index 000000000..f5882d92c
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/src/main.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    println!("{}", smoke_lib::render(64));
++}
+diff --git a/loongarch64_adaptation/smoke_bzlmod/README.md b/loongarch64_adaptation/smoke_bzlmod/README.md
+new file mode 100644
+index 000000000..c00a597c9
+--- /dev/null
++++ b/loongarch64_adaptation/smoke_bzlmod/README.md
+@@ -0,0 +1,23 @@
++# LoongArch64 Bzlmod Smoke Workspace
++
++Run this workspace from inside a patched `rules_rust` checkout:
++
++```bash
++cd loongarch64_adaptation/smoke_bzlmod
++bazel sync
++bazel test //:smoke_test
++bazel run //:smoke_bin
++```
++
++Expected `bazel run` output:
++
++```text
++loongarch64-smoke:64
++```
++
++This validates:
++- Bzlmod local override of the patched `rules_rust`;
++- Rust 1.77.2 LoongArch64 host toolchain download and registration;
++- `rust_library`, `rust_test`, and `rust_binary`;
++- `cargo_build_script` execution and `cargo:rustc-env` propagation;
++- `crate_universe` `from_specs` for a third-party crate on `loongarch64-unknown-linux-gnu`.
