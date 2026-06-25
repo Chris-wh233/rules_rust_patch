@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000010 Mon Sep 17 00:00:00 2001
+From: LoongArch64 Adaptation <loongarch64-adaptation@example.invalid>
+Date: Wed, 24 Jun 2026 14:50:00 +0800
+Subject: [PATCH] Disable cargo-bazel clap color stack on LoongArch64
+
+The remaining observed LoongArch64 build failure for
+//crate_universe:cargo_bazel is not another missing generated platform
+select entry. It is a source-level failure in rustix-0.37.23 reached through
+an optional CLI color/terminal-detection dependency chain:
+
+    clap_builder -> anstream -> is-terminal -> rustix
+
+rustix-0.37.23 does not have complete LoongArch64 support in this path. It
+falls onto a libc backend that references constants and syscall helpers that
+are not available for this target in the vendored version.
+
+For the Kong-driven use case, cargo-bazel needs to generate Bazel metadata; it
+does not require colored CLI output. Disable clap's default feature set and
+keep the non-color features that cargo-bazel already relied on. Mirror that in
+the checked-in vendored BUILD files by removing the color feature and anstream
+dependency.
+
+Reason: avoiding this optional terminal/color stack is smaller and lower-risk
+than porting old rustix source code, and it keeps the LoongArch64 adaptation
+focused on building cargo-bazel for downstream Kong builds.
+---
+ crate_universe/3rdparty/crates/BUILD.clap-4.3.11.bazel         | 2 --
+ crate_universe/3rdparty/crates/BUILD.clap_builder-4.3.11.bazel | 2 --
+ crate_universe/Cargo.toml                                      | 10 +++++++++-
+ 3 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/crate_universe/Cargo.toml b/crate_universe/Cargo.toml
+index 7bdd9d8c..f3e8294a 100644
+--- a/crate_universe/Cargo.toml
++++ b/crate_universe/Cargo.toml
+@@ -26,7 +26,15 @@ cargo_toml = "0.19.2"
+ cargo-lock = "9.0.0"
+ cargo-platform = "0.1.4"
+ cfg-expr = "0.15.5"
+-clap = { version = "4.3.11", features = ["derive", "env"] }
++clap = { version = "4.3.11", default-features = false, features = [
++    "std",
++    "derive",
++    "env",
++    "error-context",
++    "help",
++    "suggestions",
++    "usage",
++] }
+ crates-index = { version = "2.2.0", default-features = false, features = [
+     "git",
+ ] }
+diff --git a/crate_universe/3rdparty/crates/BUILD.clap-4.3.11.bazel b/crate_universe/3rdparty/crates/BUILD.clap-4.3.11.bazel
+index 25cf94a0..f84193cb 100644
+--- a/crate_universe/3rdparty/crates/BUILD.clap-4.3.11.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.clap-4.3.11.bazel
+@@ -29,8 +29,6 @@ rust_library(
+         ],
+     ),
+     crate_features = [
+-        "color",
+-        "default",
+         "derive",
+         "env",
+         "error-context",
+diff --git a/crate_universe/3rdparty/crates/BUILD.clap_builder-4.3.11.bazel b/crate_universe/3rdparty/crates/BUILD.clap_builder-4.3.11.bazel
+index b93c7c9d..f07cf83e 100644
+--- a/crate_universe/3rdparty/crates/BUILD.clap_builder-4.3.11.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.clap_builder-4.3.11.bazel
+@@ -29,7 +29,6 @@ rust_library(
+         ],
+     ),
+     crate_features = [
+-        "color",
+         "env",
+         "error-context",
+         "help",
+@@ -89,7 +88,6 @@ rust_library(
+     }),
+     version = "4.3.11",
+     deps = [
+-        "@cui__anstream-0.3.2//:anstream",
+         "@cui__anstyle-1.0.1//:anstyle",
+         "@cui__clap_lex-0.5.0//:clap_lex",
+         "@cui__strsim-0.10.0//:strsim",
+-- 
+2.45.0

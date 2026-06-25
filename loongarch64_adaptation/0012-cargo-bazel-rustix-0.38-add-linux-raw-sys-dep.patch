@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000012 Mon Sep 17 00:00:00 2001
+From: LoongArch64 Adaptation <loongarch64-adaptation@example.invalid>
+Date: Thu, 25 Jun 2026 09:45:00 +0800
+Subject: [PATCH] Add linux_raw_sys dep for rustix 0.38 LoongArch64 libc path
+
+After 0011, rustix-0.38.21 builds through its libc backend on LoongArch64, but
+the libc backend still references linux_raw_sys for Linux fs/io constants and
+types:
+
+    linux_dirent64
+    open_how
+    EXT4_IOC_RESIZE_FS
+    RWF_*
+
+Select linux-raw-sys-0.4.10 for the LoongArch64 branch so those imports are
+available. This does not enable the rustix linux-raw syscall backend; it only
+provides the constants and type definitions used by rustix's libc backend.
+
+Reason: keep the tempfile/rustix path working for cargo_bazel without porting
+rustix's raw syscall backend to LoongArch64.
+---
+ crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+index 53eb1fdf..79282326 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+@@ -310,6 +310,7 @@ rust_library(
+         "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
+             "@cui__errno-0.3.1//:errno",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
+             "@cui__libc-0.2.149//:libc",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
++            "@cui__linux-raw-sys-0.4.10//:linux_raw_sys",  # rustix libc backend fs/io modules still use linux_raw_sys constants and types.
+         ],
+         "@rules_rust//rust/platform:i686-pc-windows-msvc": [
+             "@cui__errno-0.3.1//:errno",  # cfg(windows)
+-- 
+2.45.0
+

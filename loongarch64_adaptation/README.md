@@ -86,6 +86,37 @@ This patch adds `@rules_rust//rust/platform:loongarch64-unknown-linux-gnu` to ge
 
 Reason: after `0008`, `//crate_universe:cargo_bazel` can analyze more vendored crates on LoongArch64, but some crates still fall through to empty dependency branches. The observed `getrandom-0.2.10` failure is caused by compiling Unix libc code without selecting the generated `libc` dependency. The patch avoids copying branches whose cfg is explicitly for other CPU architectures.
 
+## Stage 9: cargo-bazel Avoids clap Color Stack
+
+`0010-cargo-bazel-disable-clap-color-stack.patch`
+
+This patch disables `clap`'s default `color` feature for `cargo_bazel` while keeping the CLI features it already used: `std`, `derive`, `env`, `error-context`, `help`, `suggestions`, and `usage`.
+
+Reason: after `0009`, the remaining observed `//crate_universe:cargo_bazel` failure is inside `rustix-0.37.23`, reached through the optional CLI color/terminal detection path `clap_builder -> anstream -> is-terminal -> rustix`. Porting old `rustix` libc/terminal support to LoongArch64 is larger than needed for Kong's `cargo_bazel` use. Disabling colored CLI output removes that non-essential dependency path and keeps the adaptation smaller.
+
+## Stage 10: cargo-bazel rustix 0.38 tempfile Path
+
+`0011-cargo-bazel-rustix-0.38-loongarch64-libc-path.patch`
+
+This patch fixes the remaining `rustix-0.38.21` path pulled by `tempfile-3.8.1`:
+- adds the LoongArch64 `errno` alias used by rustix's libc backend;
+- adds LoongArch64 runtime deps on `errno` and `libc`;
+- removes the LoongArch64 `termios` feature entries added by the generic vendored cfg pass.
+
+Reason: unlike the `clap` color stack removed by `0010`, `tempfile` is a normal `cargo_bazel` dependency and should stay. `rustix-0.38.21` does not provide a LoongArch64 linux-raw backend, so the smaller route is to build the libc backend for the `fs/std` functionality that `tempfile` needs, while avoiding the unrelated `termios` feature that triggers missing LoongArch64 libc terminal constants.
+
+`0012-cargo-bazel-rustix-0.38-add-linux-raw-sys-dep.patch`
+
+This follow-up adds `linux-raw-sys-0.4.10` to the LoongArch64 dependency branch for `rustix-0.38.21`.
+
+Reason: LoongArch64 should still use rustix's libc backend, but rustix's libc `fs` and `io` modules reference `linux_raw_sys` for Linux structs and constants such as `linux_dirent64`, `open_how`, `EXT4_IOC_RESIZE_FS`, and `RWF_*`. Selecting the dependency fixes those imports without enabling the linux-raw syscall backend.
+
+`0013-cargo-bazel-rustix-0.38-restore-termios-for-gix-prompt.patch`
+
+This follow-up restores the LoongArch64 `termios` feature entries for `rustix-0.38.21`.
+
+Reason: `gix-prompt-0.7.0` imports `rustix::termios` on Unix, so `cargo_bazel` still needs rustix termios support through the `crates-index`/`gix` dependency stack. With `0011` and `0012`, the LoongArch64 rustix branch now has the libc, errno, and linux_raw_sys dependencies needed by the libc backend; therefore the next minimal step is to restore the feature instead of removing `gix-prompt`.
+
 ## LoongArch64 Verification
 
 Run these on a LoongArch64 Linux machine after applying `0003` to rules_rust 0.42.1:
@@ -98,6 +129,10 @@ git apply loongarch64_adaptation/0006-loongarch64-smoke-explicit-platform.patch
 git apply loongarch64_adaptation/0007-add-loongarch64-workspace-smoke-workspace.patch
 git apply loongarch64_adaptation/0008-add-loongarch64-to-cargo-bazel-vendored-crates.patch
 git apply loongarch64_adaptation/0009-add-loongarch64-to-cargo-bazel-vendored-selects.patch
+git apply loongarch64_adaptation/0010-cargo-bazel-disable-clap-color-stack.patch
+git apply loongarch64_adaptation/0011-cargo-bazel-rustix-0.38-loongarch64-libc-path.patch
+git apply loongarch64_adaptation/0012-cargo-bazel-rustix-0.38-add-linux-raw-sys-dep.patch
+git apply loongarch64_adaptation/0013-cargo-bazel-rustix-0.38-restore-termios-for-gix-prompt.patch
 
 bazel test //test/unit/platform_triple:all
 bazel test //test/load_arbitrary_tool:all

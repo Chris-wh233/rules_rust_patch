@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000011 Mon Sep 17 00:00:00 2001
+From: LoongArch64 Adaptation <loongarch64-adaptation@example.invalid>
+Date: Wed, 24 Jun 2026 15:35:00 +0800
+Subject: [PATCH] Fix rustix 0.38 libc path for LoongArch64 cargo-bazel
+
+After disabling clap's color stack, the remaining rustix dependency comes from
+tempfile-3.8.1:
+
+    cargo_bazel -> tempfile -> rustix-0.38.21
+
+Unlike the color stack, tempfile is normal cargo-bazel functionality and should
+not be removed. rustix-0.38.21 does not include a LoongArch64 linux-raw backend
+in its target cfg list, so treat LoongArch64 like the other libc-backend Unix
+targets in the generated Bazel metadata.
+
+Add the missing libc_errno alias and select the errno/libc deps for
+LoongArch64. Also remove the LoongArch64 termios feature entries introduced by
+the generic vendored cfg pass: tempfile needs rustix fs/std support, not
+terminal control APIs, and termios is the path that triggers missing libc
+terminal constants on this target.
+
+Reason: this keeps the Kong-oriented cargo-bazel build path small. It patches
+the required tempfile/rustix dependency without porting the whole rustix
+terminal or linux-raw syscall backend.
+---
+ crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+index b6cb5762..53eb1fdf 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+@@ -33,6 +33,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-linux-android": {
+             "@cui__errno-0.3.1//:errno": "libc_errno",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
+         },
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": {
++            "@cui__errno-0.3.1//:errno": "libc_errno",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
++        },
+         "@rules_rust//rust/platform:aarch64-pc-windows-msvc": {
+             "@cui__errno-0.3.1//:errno": "libc_errno",  # cfg(windows)
+         },
+@@ -138,9 +141,6 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
+-        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
+-            "termios",  # loongarch64-unknown-linux-gnu
+-        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+@@ -306,6 +306,10 @@ rust_library(
+             "@cui__libc-0.2.149//:libc",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
+             "@cui__linux-raw-sys-0.4.10//:linux_raw_sys",  # cfg(all(any(target_os = "android", target_os = "linux"), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "@cui__errno-0.3.1//:errno",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
++            "@cui__libc-0.2.149//:libc",  # cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = "linux", target_endian = "little", any(target_arch = "arm", all(target_arch = "aarch64", target_pointer_width = "64"), target_arch = "riscv64", all(rustix_use_experimental_asm, target_arch = "powerpc64"), all(rustix_use_experimental_asm, target_arch = "mips"), all(rustix_use_experimental_asm, target_arch = "mips32r6"), all(rustix_use_experimental_asm, target_arch = "mips64"), all(rustix_use_experimental_asm, target_arch = "mips64r6"), target_arch = "x86", all(target_arch = "x86_64", target_pointer_width = "64")))))))
++        ],
+         "@rules_rust//rust/platform:i686-pc-windows-msvc": [
+             "@cui__errno-0.3.1//:errno",  # cfg(windows)
+             "@cui__windows-sys-0.48.0//:windows_sys",  # cfg(windows)
+@@ -423,9 +427,6 @@ cargo_build_script(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
+-        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
+-            "termios",  # loongarch64-unknown-linux-gnu
+-        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+-- 
+2.45.0
+

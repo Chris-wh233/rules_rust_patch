@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000013 Mon Sep 17 00:00:00 2001
+From: LoongArch64 Adaptation <loongarch64-adaptation@example.invalid>
+Date: Thu, 25 Jun 2026 10:10:00 +0800
+Subject: [PATCH] Restore rustix 0.38 termios for LoongArch64 gix-prompt
+
+gix-prompt-0.7.0 imports rustix::termios on Unix. After 0011 removed the
+LoongArch64 termios feature entries from rustix-0.38.21, cargo_bazel can get
+past the tempfile/rustix path but then fails compiling gix-prompt:
+
+    unresolved imports rustix::termios
+
+Restore the LoongArch64 termios feature entries for both the rust_library and
+the rustix build script. The earlier 0011/0012 changes remain in place: the
+LoongArch64 branch still selects errno, libc, and linux_raw_sys for rustix's
+libc backend.
+
+Reason: gix-prompt is part of the crates-index/gix stack used by cargo_bazel,
+so removing rustix termios is too broad. Restoring the feature is the minimal
+next step now that the LoongArch64 rustix dependency branch has the backend
+deps it was missing.
+---
+ crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+index 79282326..7031fadb 100644
+--- a/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
++++ b/crate_universe/3rdparty/crates/BUILD.rustix-0.38.21.bazel
+@@ -141,6 +141,9 @@ rust_library(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "termios",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+@@ -428,6 +431,9 @@ cargo_build_script(
+         "@rules_rust//rust/platform:aarch64-unknown-linux-gnu": [
+             "termios",  # aarch64-unknown-linux-gnu
+         ],
++        "@rules_rust//rust/platform:loongarch64-unknown-linux-gnu": [
++            "termios",  # loongarch64-unknown-linux-gnu
++        ],
+         "@rules_rust//rust/platform:aarch64-unknown-nixos-gnu": [
+             "termios",  # aarch64-unknown-nixos-gnu
+         ],
+-- 
+2.45.0
+
