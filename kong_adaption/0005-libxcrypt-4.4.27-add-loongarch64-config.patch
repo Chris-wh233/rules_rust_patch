@@ -1,0 +1,47 @@
+diff --git a/build/cross_deps/libxcrypt/002-4.4.27-add-loongarch64-config.patch b/build/cross_deps/libxcrypt/002-4.4.27-add-loongarch64-config.patch
+new file mode 100644
+index 0000000..844fada
+--- /dev/null
++++ b/build/cross_deps/libxcrypt/002-4.4.27-add-loongarch64-config.patch
+@@ -0,0 +1,26 @@
++diff --git a/build-aux/m4-autogen/config.guess b/build-aux/m4-autogen/config.guess
++index 4451d7d..1cdd0ac 100755
++--- a/build-aux/m4-autogen/config.guess
+++++ b/build-aux/m4-autogen/config.guess
++@@ -909,6 +909,9 @@ EOF
++     aarch64:Linux:*:*)
++ 	echo "$UNAME_MACHINE"-unknown-linux-"$LIBC"
++ 	exit ;;
+++    loongarch64:Linux:*:*)
+++	echo "$UNAME_MACHINE"-unknown-linux-"$LIBC"
+++	exit ;;
++     aarch64_be:Linux:*:*)
++ 	UNAME_MACHINE=aarch64_be
++ 	echo "$UNAME_MACHINE"-unknown-linux-"$LIBC"
++diff --git a/build-aux/m4-autogen/config.sub b/build-aux/m4-autogen/config.sub
++index 0587809..1e92ac4 100755
++--- a/build-aux/m4-autogen/config.sub
+++++ b/build-aux/m4-autogen/config.sub
++@@ -1180,6 +1180,7 @@ case $cpu-$vendor in
++ 			| k1om \
++ 			| le32 | le64 \
++ 			| lm32 \
+++			| loongarch64 \
++ 			| m32c | m32r | m32rle \
++ 			| m5200 | m68000 | m680[012346]0 | m68360 | m683?2 | m68k | v70 | w65 \
++ 			| m6811 | m68hc11 | m6812 | m68hc12 | m68hcs12x | nvptx | picochip \
+diff --git a/build/cross_deps/libxcrypt/repositories.bzl b/build/cross_deps/libxcrypt/repositories.bzl
+index edce21d..0868f93 100644
+--- a/build/cross_deps/libxcrypt/repositories.bzl
++++ b/build/cross_deps/libxcrypt/repositories.bzl
+@@ -17,6 +17,9 @@ def libxcrypt_repositories():
+         sha256 = "500898e80dc0d027ddaadb5637fa2bf1baffb9ccd73cd3ab51d92ef5b8a1f420",
+         strip_prefix = "libxcrypt-4.4.27",
+         build_file = "//build/cross_deps/libxcrypt:BUILD.libxcrypt.bazel",
+-        patches = ["//build/cross_deps/libxcrypt:001-4.4.27-enable-hash-all.patch"],
++        patches = [
++            "//build/cross_deps/libxcrypt:001-4.4.27-enable-hash-all.patch",
++            "//build/cross_deps/libxcrypt:002-4.4.27-add-loongarch64-config.patch",
++        ],
+         patch_args = ["-p1"],
+     )

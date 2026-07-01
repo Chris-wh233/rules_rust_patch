@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 17:30:00 +0800
+Subject: [PATCH] libxcrypt: add LoongArch64 minver metadata
+
+libxcrypt 4.4.27 can recognize the LoongArch64 GNU/Linux tuple after the
+config.guess/config.sub update, but it still fails configure when obsolete API
+compatibility is enabled:
+
+  libxcrypt port to loongarch64-unknown-linux-gnu is incomplete
+
+The failure comes from `lib/libcrypt.minver`: LoongArch64 is missing from the
+Linux/glibc symbol-version floor table, so it falls through to the intentional
+`ERROR linux.*gnu .` guard.
+
+Newer libxcrypt releases define LoongArch64 as `GLIBC_2.36` for the 64-bit
+lp64* ABI.  Backport that minver entry and the matching symbol-version chain
+entry into Kong's bundled libxcrypt 4.4.27 so it can build the
+obsolete-compatible `libcrypt.so.1` ABI on LoongArch64 instead of switching to
+`libcrypt.so.2`.
+---
+ .../003-4.4.27-add-loongarch64-minver.patch  | 21 +++++++++++++++++++++
+ build/cross_deps/libxcrypt/repositories.bzl  |  5 ++++-
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/build/cross_deps/libxcrypt/003-4.4.27-add-loongarch64-minver.patch b/build/cross_deps/libxcrypt/003-4.4.27-add-loongarch64-minver.patch
+new file mode 100644
+index 0000000..af5d243
+--- /dev/null
++++ b/build/cross_deps/libxcrypt/003-4.4.27-add-loongarch64-minver.patch
+@@ -0,0 +1,21 @@
++diff --git a/lib/libcrypt.minver b/lib/libcrypt.minver
++index 958d015..ecfa0da 100644
++--- a/lib/libcrypt.minver
+++++ b/lib/libcrypt.minver
++@@ -60,6 +60,7 @@ GLIBC_2.3    kfreebsd.*gnu   i[3-9]86
++ ERROR        kfreebsd.*gnu   .
++ 
++ # Linux with GNU libc
+++GLIBC_2.36   linux.*gnu      loongarch64   __WORDSIZE == 64 && ULONG_MAX != UINT_MAX /* lp64* ABI */
++ GLIBC_2.33   linux.*gnu      riscv32
++ GLIBC_2.32   linux.*gnu      arc
++ GLIBC_2.29   linux.*gnu      csky
++diff --git a/lib/libcrypt.map.in b/lib/libcrypt.map.in
++index 6f0ebd2..f40f5af 100644
++--- a/lib/libcrypt.map.in
+++++ b/lib/libcrypt.map.in
++@@ -42,5 +42,5 @@ fcrypt			-		GLIBC_2.0
++ # libcrypt.minver.  The ordering is left to right, top to bottom.
++ %chain GLIBC_2.0 GLIBC_2.2 GLIBC_2.2.1 GLIBC_2.2.2 GLIBC_2.2.5 GLIBC_2.2.6
++ %chain GLIBC_2.3 GLIBC_2.4 GLIBC_2.12 GLIBC_2.16 GLIBC_2.17 GLIBC_2.18
++-%chain GLIBC_2.21 GLIBC_2.27 GLIBC_2.29 GLIBC_2.32 GLIBC_2.33
+++%chain GLIBC_2.21 GLIBC_2.27 GLIBC_2.29 GLIBC_2.32 GLIBC_2.33 GLIBC_2.36
++ %chain OW_CRYPT_1.0 XCRYPT_2.0 XCRYPT_4.3 XCRYPT_4.4
+diff --git a/build/cross_deps/libxcrypt/repositories.bzl b/build/cross_deps/libxcrypt/repositories.bzl
+index 0868f93..fb6ed9e 100644
+--- a/build/cross_deps/libxcrypt/repositories.bzl
++++ b/build/cross_deps/libxcrypt/repositories.bzl
+@@ -20,6 +20,7 @@ def libxcrypt_repositories():
+         patches = [
+             "//build/cross_deps/libxcrypt:001-4.4.27-enable-hash-all.patch",
+             "//build/cross_deps/libxcrypt:002-4.4.27-add-loongarch64-config.patch",
++            "//build/cross_deps/libxcrypt:003-4.4.27-add-loongarch64-minver.patch",
+         ],
+         patch_args = ["-p1"],
+     )
+-- 
+2.45.0

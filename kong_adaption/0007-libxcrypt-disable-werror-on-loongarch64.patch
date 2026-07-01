@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 10:30:00 +0800
+Subject: [PATCH] libxcrypt: disable werror on LoongArch64
+
+libxcrypt 4.4.27 enables warnings-as-errors by default.  On the
+LoongArch64 build host used for this adaptation, newer GCC diagnoses
+lib/util-base64.c with -Wunterminated-string-initialization:
+
+  initializer-string for array of 'unsigned char' truncates NUL terminator
+
+That warning is in libxcrypt's bundled source and is not specific to Kong's
+LoongArch64 integration.  The package's configure script already provides
+--disable-werror for this compatibility case, so use that switch only for
+LoongArch64 instead of patching C sources or weakening other platforms.
+---
+ build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel b/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
+index 1210e3f..8ae3385 100644
+--- a/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
++++ b/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
+@@ -30,6 +30,11 @@ configure_make(
+             "--enable-obsolete-api=no",
+         ],
+         "//conditions:default": [],
++    }) + select({
++        "@kong//:loongarch64-linux": [
++            "--disable-werror",
++        ],
++        "//conditions:default": [],
+     }),
+     configure_xcompile = True,  # use automatic cross compile detection
+     lib_source = ":all_srcs",
+-- 
+2.45.0

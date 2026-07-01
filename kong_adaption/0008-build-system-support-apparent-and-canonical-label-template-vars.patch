@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 11:20:00 +0800
+Subject: [PATCH] build: support apparent and canonical label template vars
+
+Kong's template genrule expands placeholders derived from dependency labels.
+Some templates use the canonical repository spelling, for example:
+
+  {{@@libexpat//:libexpat}}
+
+With the observed Bazel workspace-mode build, Label stringification can provide
+the apparent spelling instead:
+
+  @libexpat//:libexpat
+
+When only one spelling is registered, the placeholder remains unexpanded and
+the generated script tries to access a literal path such as
+`{{@@libexpat//:libexpat}}/lib/libexpat.*`.
+
+Register both spellings for external and main-repository labels while keeping
+the existing template format unchanged.
+---
+ build/build_system.bzl | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/build/build_system.bzl b/build/build_system.bzl
+index bfd45d0..6d8d1c2 100644
+--- a/build/build_system.bzl
++++ b/build/build_system.bzl
+@@ -98,7 +98,16 @@ def _render_template(ctx, output):
+             for file in files:  # get the one with shorted path, that will be the directory
+                 if len(file.path) < len(p):
+                     p = file.path
+-        substitutions["{{%s}}" % l.label] = p
++        label = str(l.label)
++        substitutions["{{%s}}" % label] = p
++
++        # Bazel versions differ in whether Label stringification includes the
++        # canonical repository marker ("@@") or the apparent repository marker
++        # ("@"). Keep existing templates working across both forms.
++        if label.startswith("@@"):
++            substitutions["{{%s}}" % label[1:]] = p
++        elif label.startswith("@"):
++            substitutions["{{@%s}}" % label] = p
+ 
+     substitutions["{{CC}}"] = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo].compiler_executable
+ 
+-- 
+2.45.0

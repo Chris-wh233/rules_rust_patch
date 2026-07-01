@@ -1,0 +1,45 @@
+diff --git a/WORKSPACE b/WORKSPACE
+index 43980a1..9d9aa8d 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -17,6 +17,8 @@ http_archive(
+ # before workspace helper macros so an older transitive default cannot win.
+ http_archive(
+     name = "platforms",
++    patch_args = ["-p1"],
++    patches = ["//third_party:platforms_loongarch64.patch"],
+     sha256 = "dbad4a23abcca6171e47b79edc53bd6a41067a3b75f9e8b104656b459ff25046",
+     urls = [
+         "https://mirror.bazel.build/github.com/bazelbuild/platforms/releases/download/1.1.0/platforms-1.1.0.tar.gz",
+diff --git a/third_party/platforms_loongarch64.patch b/third_party/platforms_loongarch64.patch
+new file mode 100644
+index 0000000..ca9fa14
+--- /dev/null
++++ b/third_party/platforms_loongarch64.patch
+@@ -0,0 +1,26 @@
++diff --git a/cpu/BUILD b/cpu/BUILD
++index 6497452..e7afb92 100644
++--- a/cpu/BUILD
+++++ b/cpu/BUILD
++@@ -188,3 +188,8 @@ constraint_value(
++     name = "riscv64",
++     constraint_setting = ":cpu",
++ )
+++
+++constraint_value(
+++    name = "loongarch64",
+++    constraint_setting = ":cpu",
+++)
++diff --git a/host/extension.bzl b/host/extension.bzl
++index 69410cd..77d5e4b 100644
++--- a/host/extension.bzl
+++++ b/host/extension.bzl
++@@ -17,6 +17,8 @@ def _translate_cpu(arch):
++         return "mips64"
++     if arch in ["riscv64"]:
++         return "riscv64"
+++    if arch in ["loongarch64", "loong64"]:
+++        return "loongarch64"
++     return None
++ 
++ def _translate_os(os):

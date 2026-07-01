@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 15:20:00 +0800
+Subject: [PATCH] luarocks: force stale tree locks during make
+
+After earlier build failures or interrupted Bazel actions, LuaRocks can leave a
+lock file under the generated `luarocks_tree` directory:
+
+  luarocks_tree/lockfile.lfs
+
+The following retry then fails with:
+
+  command 'make' requires exclusive write access ... try --force-lock
+
+Kong already makes `luarocks_make` depend on `luarocks_target` to avoid the
+known concurrency issue between those two actions.  Use LuaRocks' own
+`--force-lock` recovery switch for the make step so a stale lock from a
+previous failed action does not block a clean retry.
+---
+ build/luarocks/templates/luarocks_make.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/build/luarocks/templates/luarocks_make.sh b/build/luarocks/templates/luarocks_make.sh
+index 96cbc9b..21864b6 100644
+--- a/build/luarocks/templates/luarocks_make.sh
++++ b/build/luarocks/templates/luarocks_make.sh
+@@ -15,7 +15,7 @@ mkdir -p $(dirname $@)
+ # alias LDOC command to true(1) command
+ export LDOC=true
+ 
+-$luarocks_exec make --no-doc 2>&1 >$@.tmp
++$luarocks_exec make --no-doc --force-lock 2>&1 >$@.tmp
+ 
+ # only generate the output when the command succeeds
+-mv $@.tmp $@
+\ No newline at end of file
++mv $@.tmp $@
+-- 
+2.45.0

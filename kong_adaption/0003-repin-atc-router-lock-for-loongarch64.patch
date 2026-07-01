@@ -1,0 +1,46 @@
+diff --git a/crate_locks/atc_router.lock b/crate_locks/atc_router.lock
+index 9c41fe7..fbd2491 100644
+--- a/crate_locks/atc_router.lock
++++ b/crate_locks/atc_router.lock
+@@ -1,5 +1,5 @@
+ {
+-  "checksum": "a9a20974f77d4fa9001e79b35a202afc62efc5de414664912c347ea3475fe888",
++  "checksum": "156bec3d4a88d0d5f8edb2446144229dbd528c88e947d8237e99f925b6dd765c",
+   "crates": {
+     "aho-corasick 1.1.3": {
+       "name": "aho-corasick",
+@@ -655,13 +655,6 @@
+         "compile_data_glob": [
+           "**"
+         ],
+-        "crate_features": {
+-          "common": [
+-            "default",
+-            "std"
+-          ],
+-          "selects": {}
+-        },
+         "deps": {
+           "common": [
+             {
+@@ -1920,7 +1913,9 @@
+       "aarch64-apple-ios",
+       "aarch64-apple-ios-sim"
+     ],
+-    "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))": [],
++    "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))": [
++      "loongarch64-unknown-linux-gnu"
++    ],
+     "cfg(any(target_arch = \"aarch64\", target_arch = \"x86_64\", target_arch = \"x86\"))": [
+       "aarch64-apple-darwin",
+       "aarch64-apple-ios",
+@@ -1961,6 +1956,9 @@
+     "i686-unknown-linux-gnu": [
+       "i686-unknown-linux-gnu"
+     ],
++    "loongarch64-unknown-linux-gnu": [
++      "loongarch64-unknown-linux-gnu"
++    ],
+     "powerpc-unknown-linux-gnu": [
+       "powerpc-unknown-linux-gnu"
+     ],

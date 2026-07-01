@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 16:05:00 +0800
+Subject: [PATCH] deb: drop obsolete libpcre3 dependency
+
+Kong 3.9.1 builds PCRE2 10.44 through Bazel and links it statically into the
+OpenResty/nginx binary.  The repository's manifest checks also assert that
+nginx does not depend on dynamic libpcre or libpcre2 runtime libraries.
+
+The Debian package metadata still lists `libpcre3`, which is the old PCRE 1.x
+runtime package name.  That package is unavailable in newer Debian environments
+such as forky, and it is not required by this Kong build.
+
+Remove the stale dependency instead of replacing it with a PCRE2 runtime
+package.
+---
+ build/package/nfpm.yaml | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/build/package/nfpm.yaml b/build/package/nfpm.yaml
+index bdb01ec..18f25b0 100644
+--- a/build/package/nfpm.yaml
++++ b/build/package/nfpm.yaml
+@@ -70,7 +70,6 @@ overrides:
+   deb:
+     depends:
+     - ca-certificates
+-    - libpcre3
+     - perl
+     - libyaml-0-2
+   rpm:
+-- 
+2.45.0

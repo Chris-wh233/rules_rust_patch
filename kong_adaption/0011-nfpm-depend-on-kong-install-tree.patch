@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Tue, 30 Jun 2026 19:05:00 +0800
+Subject: [PATCH] nfpm: depend on Kong install tree
+
+The nFPM package action creates `nfpm-prefix` as a symlink to Bazel's
+`bazel-out/.../build/kong-dev` install tree, but it did not declare
+`//build:kong` as an input.
+
+After `bazel clean --expunge`, directly building `//:kong_deb` can therefore
+run nFPM before the Kong install tree exists.  nFPM then fails with:
+
+  matching "./nfpm-prefix/bin": file does not exist
+
+Declare `//build:kong` as a hidden input of the package rule so `//:kong_deb`
+properly depends on the install tree.  Also declare the nFPM config file as an
+input of the action that reads it.
+---
+ build/nfpm/rules.bzl | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/build/nfpm/rules.bzl b/build/nfpm/rules.bzl
+index 951b4f0..a38cb16 100644
+--- a/build/nfpm/rules.bzl
++++ b/build/nfpm/rules.bzl
+@@ -36,7 +36,7 @@ def _nfpm_pkg_impl(ctx):
+     build_destdir = ctx.var["BINDIR"] + "/build/" + KONG_VAR["BUILD_NAME"]
+ 
+     ctx.actions.run_shell(
+-        inputs = ctx.files._nfpm_bin,
++        inputs = ctx.files._nfpm_bin + ctx.files._kong_build + [ctx.file.config],
+         mnemonic = "nFPM",
+         command = "ln -sf %s nfpm-prefix; external/nfpm/nfpm $@" % build_destdir,
+         arguments = [nfpm_args],
+@@ -75,6 +75,9 @@ nfpm_pkg = rule(
+         "_nfpm_bin": attr.label(
+             default = "@nfpm//:all_srcs",
+         ),
++        "_kong_build": attr.label(
++            default = "//build:kong",
++        ),
+         "_cc_toolchain": attr.label(
+             default = "@bazel_tools//tools/cpp:current_cc_toolchain",
+         ),
+-- 
+2.45.0

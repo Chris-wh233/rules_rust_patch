@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Wed, 1 Jul 2026 15:20:00 +0800
+Subject: [PATCH] pdk: support LoongArch64 in nginx FFI arch check
+
+Kong's PDK nginx module selects the C type used for Nginx connection/request
+statistics based on LuaJIT FFI's architecture string.
+
+LoongArch64 LuaJIT reports:
+
+  ffi.arch == "loongarch64"
+
+The existing code only treats `x64` and `arm64` as 64-bit architectures, so
+Kong logs `Unsupported arch: loongarch64` during nginx init.
+
+LoongArch64 uses a 64-bit ABI in this build, so use the same uint64_t counter
+definitions as x64 and arm64.
+---
+ kong/pdk/nginx.lua | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kong/pdk/nginx.lua b/kong/pdk/nginx.lua
+index 5517742..616cbb7 100644
+--- a/kong/pdk/nginx.lua
++++ b/kong/pdk/nginx.lua
+@@ -12,7 +12,7 @@ local arch = ffi.arch
+ local ngx  = ngx
+ local tonumber = tonumber
+ 
+-if arch == "x64" or arch == "arm64" then
++if arch == "x64" or arch == "arm64" or arch == "loongarch64" then
+   ffi.cdef[[
+     uint64_t *ngx_stat_active;
+     uint64_t *ngx_stat_reading;
+-- 
+2.45.0

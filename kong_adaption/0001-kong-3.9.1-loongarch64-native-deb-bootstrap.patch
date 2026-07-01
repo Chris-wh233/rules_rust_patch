@@ -1,0 +1,296 @@
+diff --git a/.requirements b/.requirements
+index 77c71bd..84424d0 100644
+--- a/.requirements
++++ b/.requirements
+@@ -1,5 +1,9 @@
+ KONG_PACKAGE_NAME=kong
+ 
++# LoongArch64 builds use the Loongson LuaJIT2 tree because the LuaJIT bundled
++# in OpenResty 1.25.3.2 does not provide the LoongArch backend needed here.
++# This can be a local path; see build/build_system.bzl:git_or_local_repository.
++LOONGARCH_LUAJIT2=/opt/luajit2
+ OPENRESTY=1.25.3.2
+ OPENRESTY_SHA256=2d564022b06e33b45f7e5cfaf1e5dc571d38d61803af9fa2754dfff353c28d9c
+ LUAROCKS=3.11.1
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 4602b77..be6855d 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -254,6 +254,24 @@ config_setting(
+ 
+ ##### constraints, platforms and config_settings for cross-compile
+ 
++platform(
++    name = "generic-loongarch64",
++    constraint_values = [
++        "@platforms//os:linux",
++        "@platforms//cpu:loongarch64",
++        "//build/platforms/distro:generic",
++    ],
++)
++
++config_setting(
++    name = "loongarch64-linux",
++    constraint_values = [
++        "@platforms//os:linux",
++        "@platforms//cpu:loongarch64",
++    ],
++    visibility = ["//visibility:public"],
++)
++
+ constraint_setting(name = "cross_build_setting")
+ 
+ constraint_value(
+diff --git a/WORKSPACE b/WORKSPACE
+index bdc9204..a09d5a9 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -51,6 +51,8 @@ rules_foreign_cc_dependencies(
+ http_archive(
+     name = "rules_rust",
+     integrity = "sha256-JLN47ZcAbx9wEr5Jiib4HduZATGLiDgK7oUi/fvotzU=",
++    patch_args = ["-p1"],
++    patches = ["//third_party:rules_rust_loongarch64.patch"],
+     urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.42.1/rules_rust-v0.42.1.tar.gz"],
+ )
+ 
+diff --git a/build/kong_crate/deps.bzl b/build/kong_crate/deps.bzl
+index 9a11bab..b9d9839 100644
+--- a/build/kong_crate/deps.bzl
++++ b/build/kong_crate/deps.bzl
+@@ -20,13 +20,21 @@ def kong_crate_repositories(cargo_home_isolated = True):
+     # https://static.rust-lang.org/dist/channel-rust-stable.toml
+     rust_register_toolchains(
+         edition = "2021",
+-        extra_target_triples = ["aarch64-unknown-linux-gnu"],
++        extra_target_triples = [
++            "aarch64-unknown-linux-gnu",
++            "loongarch64-unknown-linux-gnu",
++        ],
+         sha256s = {
+-            "rustc-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "90b61494f5ccfd4d1ca9a5ce4a0af49a253ca435c701d9c44e3e44b5faf70cb8",
+-            "clippy-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "ea4fbf6fbd3686d4f6e2a77953e2d42a86ea31e49a5f79ec038762c413b15577",
+             "cargo-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "97aeae783874a932c4500f4d36473297945edf6294d63871784217d608718e70",
++            "cargo-1.82.0-loongarch64-unknown-linux-gnu.tar.xz": "01709e6d5b16e972e6c5e826a36331c645766ecda8f0aa48559f20c0d1129f44",
++            "clippy-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "ea4fbf6fbd3686d4f6e2a77953e2d42a86ea31e49a5f79ec038762c413b15577",
++            "clippy-1.82.0-loongarch64-unknown-linux-gnu.tar.xz": "ddbd18682a7fa0794d3bf159ba5cc5aee8c7bd6860d2edd8c9f4591753b5f05c",
+             "llvm-tools-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "29f9becd0e5f83196f94779e9e06ab76e0bd3a14bcdf599fabedbd4a69d045be",
++            "llvm-tools-1.82.0-loongarch64-unknown-linux-gnu.tar.xz": "d01b03746e9c9b03a1577636520c8611e5bef4c9bb41dbd36539e9ad95b822c0",
+             "rust-std-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "2eca3d36f7928f877c334909f35fe202fbcecce109ccf3b439284c2cb7849594",
++            "rust-std-1.82.0-loongarch64-unknown-linux-gnu.tar.xz": "8cc1399b0460b3bc4b7295165dcdcee310fd643dc29569e1786944650f2a3700",
++            "rustc-1.82.0-x86_64-unknown-linux-gnu.tar.xz": "90b61494f5ccfd4d1ca9a5ce4a0af49a253ca435c701d9c44e3e44b5faf70cb8",
++            "rustc-1.82.0-loongarch64-unknown-linux-gnu.tar.xz": "2bdbf08c8c7d3a4dc8bddddbc4cf2cdec5a3d0f4a42e19183a14bed24d8d580c",
+         },
+         versions = ["1.82.0"],
+     )
+diff --git a/build/nfpm/repositories.bzl b/build/nfpm/repositories.bzl
+index c92cc9d..7e86255 100644
+--- a/build/nfpm/repositories.bzl
++++ b/build/nfpm/repositories.bzl
+@@ -11,10 +11,17 @@ def _nfpm_release_select_impl(ctx):
+     os_name = ctx.os.name
+     os_arch = ctx.os.arch
+ 
++    nfpm_bin = ctx.os.environ.get("NFPM_BIN", "")
++    if nfpm_bin:
++        ctx.symlink(ctx.path(nfpm_bin), "nfpm")
++        return
++
+     if os_arch == "aarch64":
+         os_arch = "arm64"
+     elif os_arch == "amd64":
+         os_arch = "x86_64"
++    elif os_arch == "loongarch64" or os_arch == "loong64":
++        fail("LoongArch64 nFPM is not published upstream; set NFPM_BIN to a local nFPM binary")
+     else:
+         fail("Unsupported arch %s" % os_arch)
+ 
+@@ -28,6 +35,7 @@ def _nfpm_release_select_impl(ctx):
+ 
+ nfpm_release_select = repository_rule(
+     implementation = _nfpm_release_select_impl,
++    environ = ["NFPM_BIN"],
+     attrs = {
+         "build_file": attr.label(allow_single_file = True),
+         "build_file_content": attr.string(),
+diff --git a/build/nfpm/rules.bzl b/build/nfpm/rules.bzl
+index 96d8359..951b4f0 100644
+--- a/build/nfpm/rules.bzl
++++ b/build/nfpm/rules.bzl
+@@ -13,6 +13,8 @@ def _nfpm_pkg_impl(ctx):
+         target_arch = "amd64"
+     elif target_cpu == "aarch64" or target_cpu == "arm64":
+         target_arch = "arm64"
++    elif target_cpu == "loongarch64" or target_cpu == "loong64":
++        target_arch = "loong64"
+     else:
+         fail("Unsupported platform cpu: %s" % target_cpu)
+     env["ARCH"] = target_arch
+diff --git a/build/openresty/BUILD.openresty.bazel b/build/openresty/BUILD.openresty.bazel
+index 81ad172..fdaec38 100644
+--- a/build/openresty/BUILD.openresty.bazel
++++ b/build/openresty/BUILD.openresty.bazel
+@@ -84,7 +84,10 @@ make(
+     data = [
+         ":luajit_xcflags",
+     ],
+-    lib_source = ":luajit_srcs",
++    lib_source = select({
++        "@kong//:loongarch64-linux": "@loongarch_luajit2//:all_srcs",
++        "//conditions:default": ":luajit_srcs",
++    }),
+     out_binaries = [
+         "luajit",
+     ],
+diff --git a/build/openresty/repositories.bzl b/build/openresty/repositories.bzl
+index f4cafe9..95171bc 100644
+--- a/build/openresty/repositories.bzl
++++ b/build/openresty/repositories.bzl
+@@ -40,6 +40,14 @@ def openresty_repositories():
+     snappy_repositories()
+     ada_repositories()
+ 
++    maybe(
++        git_or_local_repository,
++        name = "loongarch_luajit2",
++        branch = KONG_VAR["LOONGARCH_LUAJIT2"],
++        remote = "https://github.com/loongson/luajit2",
++        build_file_content = _NGINX_MODULE_DUMMY_FILE,
++    )
++
+     openresty_version = KONG_VAR["OPENRESTY"]
+ 
+     maybe(
+diff --git a/third_party/rules_rust_loongarch64.patch b/third_party/rules_rust_loongarch64.patch
+new file mode 100644
+index 0000000..7ee9b29
+--- /dev/null
++++ b/third_party/rules_rust_loongarch64.patch
+@@ -0,0 +1,127 @@
++diff --git a/MODULE.bazel b/MODULE.bazel
++index 4db0a43e1..b1d9d9b1e 100644
++--- a/MODULE.bazel
+++++ b/MODULE.bazel
++@@ -15,7 +15,7 @@ bazel_dep(
++ )
++ bazel_dep(
++     name = "platforms",
++-    version = "0.0.8",
+++    version = "1.1.0",
++ )
++ bazel_dep(
++     name = "rules_cc",
++diff --git a/rust/known_shas.bzl b/rust/known_shas.bzl
++index 0dd3eb41e..959f7969d 100644
++--- a/rust/known_shas.bzl
+++++ b/rust/known_shas.bzl
++@@ -4,6 +4,15 @@ This is a generated file -- see //util:fetch_shas
++ """
++ 
++ FILE_KEY_TO_SHA = {
+++    # LoongArch64 host artifacts for the default Rust 1.77.2 toolchain.
+++    # Values are copied from the official channel-rust-1.77.2.toml manifest.
+++    "cargo-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "fca324df63156b763a5383df290410305daf888816be3a62b3e8bc5ba5f4cab2",
+++    "clippy-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "655478a457b71e7bb5cab283e6f9c446cf6bc58919ccc2582ce7c3aa96a83e67",
+++    "llvm-tools-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "1adab050cb99b0e4e10a270424799f1693726c39ddc7b8502bc11c7460c91ccf",
+++    "rust-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "422c69fc4fc2f816d2f90617e57faa7d6763b272e88e2ed16133ce3b34bad207",
+++    "rust-std-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "4701e1aa4012ef3878a6cf85fdda7f3f53fc8e2d9c44bd6e55d042c8446a2197",
+++    "rustc-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "fa8bc28b6534c4f4382fc4843fed1ef9b63dbfc7b40fb369fef721188b636614",
+++    "rustfmt-1.77.2-loongarch64-unknown-linux-gnu.tar.xz": "113f8fe44779d09d29c3470cc8a34ebc5347051c95d7b14c0a6723f05f6446be",
++     "2018-10-30/cargo-beta-aarch64-unknown-linux-gnu.tar.gz": "9d91fb3ee868421fbf8f4ed62cb7ee843dc6a1e70241331a9441e3ff09f3296d",
++     "2018-10-30/cargo-beta-aarch64-unknown-linux-gnu.tar.xz": "344ff43655bb61a31eb7b13c4120b2676b95bda94a833553932a58e8226f4b27",
++     "2018-10-30/cargo-beta-arm-unknown-linux-gnueabi.tar.gz": "0a606c94eb712e53cabb0a1d7c68412b39a76d774a2b0d1085d81afd2efa09cd",
++diff --git a/rust/platform/platform.bzl b/rust/platform/platform.bzl
++index edaa58691..06b049fcf 100644
++--- a/rust/platform/platform.bzl
+++++ b/rust/platform/platform.bzl
++@@ -14,6 +14,7 @@ _SUPPORTED_CPU_ARCH = [
++     "arm",
++     "armv7",
++     "i686",
+++    "loongarch64",
++     "powerpc",
++     "s390x",
++     "x86_64",
++diff --git a/rust/platform/triple.bzl b/rust/platform/triple.bzl
++index 1d07ce2e9..d5371de56 100644
++--- a/rust/platform/triple.bzl
+++++ b/rust/platform/triple.bzl
++@@ -114,7 +114,7 @@ def get_host_triple(repository_ctx, abi = None):
++     # Detect the host's cpu architecture
++ 
++     supported_architectures = {
++-        "linux": ["aarch64", "x86_64"],
+++        "linux": ["aarch64", "loongarch64", "x86_64"],
++         "macos": ["aarch64", "x86_64"],
++         "windows": ["aarch64", "x86_64"],
++     }
++@@ -122,6 +122,8 @@ def get_host_triple(repository_ctx, abi = None):
++     arch = repository_ctx.os.arch
++     if arch == "amd64":
++         arch = "x86_64"
+++    if arch == "loong64":
+++        arch = "loongarch64"
++ 
++     if "linux" in repository_ctx.os.name:
++         _validate_cpu_architecture(arch, supported_architectures["linux"])
++diff --git a/rust/platform/triple_mappings.bzl b/rust/platform/triple_mappings.bzl
++index f8c595615..659a957ea 100644
++--- a/rust/platform/triple_mappings.bzl
+++++ b/rust/platform/triple_mappings.bzl
++@@ -34,6 +34,7 @@ SUPPORTED_T2_PLATFORM_TRIPLES = [
++     "armv7-unknown-linux-gnueabi",
++     "i686-linux-android",
++     "i686-unknown-freebsd",
+++    "loongarch64-unknown-linux-gnu",
++     "powerpc-unknown-linux-gnu",
++     "riscv32imc-unknown-none-elf",
++     "riscv64gc-unknown-none-elf",
++@@ -66,6 +67,7 @@ _CPU_ARCH_TO_BUILTIN_PLAT_SUFFIX = {
++     "i586": None,
++     "i686": "x86_32",
++     "le32": None,
+++    "loongarch64": "loongarch64",
++     "mips": None,
++     "mipsel": None,
++     "powerpc": "ppc",
++diff --git a/rust/repositories.bzl b/rust/repositories.bzl
++index 8b16a5863..6db3ab4ff 100644
++--- a/rust/repositories.bzl
+++++ b/rust/repositories.bzl
++@@ -39,6 +39,7 @@ DEFAULT_TOOLCHAIN_TRIPLES = {
++     "aarch64-apple-darwin": "rust_darwin_aarch64",
++     "aarch64-pc-windows-msvc": "rust_windows_aarch64",
++     "aarch64-unknown-linux-gnu": "rust_linux_aarch64",
+++    "loongarch64-unknown-linux-gnu": "rust_linux_loongarch64",
++     "x86_64-apple-darwin": "rust_darwin_x86_64",
++     "x86_64-pc-windows-msvc": "rust_windows_x86_64",
++     "x86_64-unknown-freebsd": "rust_freebsd_x86_64",
++@@ -48,14 +49,24 @@ DEFAULT_TOOLCHAIN_TRIPLES = {
++ def rules_rust_dependencies():
++     """Dependencies used in the implementation of `rules_rust`."""
++ 
+++    maybe(
+++        http_archive,
+++        name = "package_metadata",
+++        sha256 = "0e89367f1cb6d93a5a1afea4b55b11ea6b28f63f653b47154153677ca7d4afea",
+++        strip_prefix = "supply-chain-0.0.3/metadata",
+++        urls = [
+++            "https://mirror.bazel.build/github.com/bazel-contrib/supply-chain/releases/download/v0.0.3/supply-chain-v0.0.3.tar.gz",
+++            "https://github.com/bazel-contrib/supply-chain/releases/download/v0.0.3/supply-chain-v0.0.3.tar.gz",
+++        ],
+++    )
++     maybe(
++         http_archive,
++         name = "platforms",
++         urls = [
++-            "https://mirror.bazel.build/github.com/bazelbuild/platforms/releases/download/0.0.8/platforms-0.0.8.tar.gz",
++-            "https://github.com/bazelbuild/platforms/releases/download/0.0.8/platforms-0.0.8.tar.gz",
+++            "https://mirror.bazel.build/github.com/bazelbuild/platforms/releases/download/1.1.0/platforms-1.1.0.tar.gz",
+++            "https://github.com/bazelbuild/platforms/releases/download/1.1.0/platforms-1.1.0.tar.gz",
++         ],
++-        sha256 = "8150406605389ececb6da07cbcb509d5637a3ab9a24bc69b1101531367d89d74",
+++        sha256 = "dbad4a23abcca6171e47b79edc53bd6a41067a3b75f9e8b104656b459ff25046",
++     )
++     maybe(
++         http_archive,
