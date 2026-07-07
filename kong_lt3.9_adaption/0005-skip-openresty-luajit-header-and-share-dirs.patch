@@ -1,0 +1,15 @@
+diff --git a/build/BUILD.bazel b/build/BUILD.bazel
+index 83d48ac10..9f9db0601 100644
+--- a/build/BUILD.bazel
++++ b/build/BUILD.bazel
+@@ -40,6 +40,10 @@ kong_rules_group(
+ kong_install(
+     name = "install-openresty-luajit",
+     src = "@openresty//:luajit",
++    exclude = [
++        "include",
++        "share",
++    ],
+     prefix = "openresty/luajit",
+ )
+ 

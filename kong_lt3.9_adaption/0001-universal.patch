@@ -1,0 +1,148 @@
+diff --git a/.requirements b/.requirements
+index 8c78d702f..d27f9c60f 100644
+--- a/.requirements
++++ b/.requirements
+@@ -1,4 +1,5 @@
+ KONG_PACKAGE_NAME=kong
++LOONGARCH_LUAJIT2=/tmp/luajit2
+ 
+ OPENRESTY=1.25.3.2
+ OPENRESTY_SHA256=2d564022b06e33b45f7e5cfaf1e5dc571d38d61803af9fa2754dfff353c28d9c
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 20c265c37..3635a6976 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -336,3 +336,21 @@ selects.config_setting_group(
+     ],
+     visibility = ["//visibility:public"],
+ )
++
++platform(
++    name = "generic-loongarch64",
++    constraint_values = [
++        "@platforms//os:linux",
++        "@platforms//cpu:loongarch64",
++        "//build/platforms/distro:generic",
++    ],
++)
++
++config_setting(
++    name = "loongarch64-linux",
++    constraint_values = [
++        "@platforms//os:linux",
++        "@platforms//cpu:loongarch64",
++    ],
++    visibility = ["//visibility:public"],
++)
+diff --git a/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel b/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
+index f1edd9a56..cd1c4229e 100644
+--- a/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
++++ b/build/cross_deps/libxcrypt/BUILD.libxcrypt.bazel
+@@ -33,6 +33,11 @@ configure_make(
+             "--host=x86_64-unknown-linux-gnu",
+         ],
+         "//conditions:default": [],
++    }) + select({
++        "@kong//:loongarch64-linux": [
++            "--disable-werror",
++        ],
++        "//conditions:default": [],
+     }) + select({
+         ":disable-obsolete-api": [
+             "--enable-obsolete-api=no",
+diff --git a/build/nfpm/repositories.bzl b/build/nfpm/repositories.bzl
+index c92cc9de0..04e582309 100644
+--- a/build/nfpm/repositories.bzl
++++ b/build/nfpm/repositories.bzl
+@@ -10,6 +10,10 @@ def _nfpm_release_select_impl(ctx):
+ 
+     os_name = ctx.os.name
+     os_arch = ctx.os.arch
++    nfpm_bin = ctx.os.environ.get("NFPM_BIN", "")
++    if nfpm_bin:
++        ctx.symlink(ctx.path(nfpm_bin), "nfpm")
++        return
+ 
+     if os_arch == "aarch64":
+         os_arch = "arm64"
+@@ -28,6 +32,7 @@ def _nfpm_release_select_impl(ctx):
+ 
+ nfpm_release_select = repository_rule(
+     implementation = _nfpm_release_select_impl,
++    environ = ["NFPM_BIN"],
+     attrs = {
+         "build_file": attr.label(allow_single_file = True),
+         "build_file_content": attr.string(),
+diff --git a/build/nfpm/rules.bzl b/build/nfpm/rules.bzl
+index cb5999bd8..537107670 100644
+--- a/build/nfpm/rules.bzl
++++ b/build/nfpm/rules.bzl
+@@ -13,6 +13,8 @@ def _nfpm_pkg_impl(ctx):
+         target_arch = "amd64"
+     elif target_cpu == "aarch64" or target_cpu == "arm64":
+         target_arch = "arm64"
++    elif target_cpu == "loongarch64" or target_cpu == "loong64":
++        target_arch = "loong64"
+     else:
+         fail("Unsupported platform cpu: %s" % target_cpu)
+     env["ARCH"] = target_arch
+diff --git a/build/openresty/BUILD.openresty.bazel b/build/openresty/BUILD.openresty.bazel
+index 700ebe22d..2eb3b3015 100644
+--- a/build/openresty/BUILD.openresty.bazel
++++ b/build/openresty/BUILD.openresty.bazel
+@@ -83,7 +83,10 @@ make(
+     data = [
+         ":luajit_xcflags",
+     ],
+-    lib_source = ":luajit_srcs",
++    lib_source = select({
++        "@kong//:loongarch64-linux": "@loongarch_luajit2//:all_srcs",
++        "//conditions:default": ":luajit_srcs",
++    }),
+     out_binaries = [
+         "luajit",
+     ],
+diff --git a/build/openresty/repositories.bzl b/build/openresty/repositories.bzl
+index 3b01aa239..029c65b3d 100644
+--- a/build/openresty/repositories.bzl
++++ b/build/openresty/repositories.bzl
+@@ -38,6 +38,14 @@ def openresty_repositories():
+     brotli_repositories()
+     snappy_repositories()
+ 
++    maybe(
++        git_or_local_repository,
++        name = "loongarch_luajit2",
++        branch = KONG_VAR["LOONGARCH_LUAJIT2"],
++        remote = "https://github.com/loongson/luajit2",
++        build_file_content = _NGINX_MODULE_DUMMY_FILE,
++    )
++
+     openresty_version = KONG_VAR["OPENRESTY"]
+ 
+     maybe(
+diff --git a/build/package/nfpm.yaml b/build/package/nfpm.yaml
+index 8ab15ea43..337771004 100644
+--- a/build/package/nfpm.yaml
++++ b/build/package/nfpm.yaml
+@@ -70,7 +70,6 @@ overrides:
+   deb:
+     depends:
+     - ca-certificates
+-    - libpcre3
+     - perl
+     - libyaml-0-2
+   rpm:
+diff --git a/kong/pdk/nginx.lua b/kong/pdk/nginx.lua
+index f5715e03e..403d50ff8 100644
+--- a/kong/pdk/nginx.lua
++++ b/kong/pdk/nginx.lua
+@@ -12,7 +12,7 @@ local arch = ffi.arch
+ local ngx  = ngx
+ local tonumber = tonumber
+ 
+-if arch == "x64" or arch == "arm64" then
++if arch == "x64" or arch == "arm64" or arch == "loongarch64" then
+   ffi.cdef[[
+     uint64_t *ngx_stat_active;
+     uint64_t *ngx_stat_reading;

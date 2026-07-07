@@ -1,0 +1,15 @@
+diff --git a/.requirements b/.requirements
+index d27f9c60f..8a14ec1d9 100644
+--- a/.requirements
++++ b/.requirements
+@@ -3,8 +3,8 @@ LOONGARCH_LUAJIT2=/tmp/luajit2
+ 
+ OPENRESTY=1.25.3.2
+ OPENRESTY_SHA256=2d564022b06e33b45f7e5cfaf1e5dc571d38d61803af9fa2754dfff353c28d9c
+-LUAROCKS=3.11.1
+-LUAROCKS_SHA256=c3fb3d960dffb2b2fe9de7e3cb004dc4d0b34bb3d342578af84f84325c669102
++LUAROCKS=3.12.0
++LUAROCKS_SHA256=3d4c8acddf9b975e77da68cbf748d5baf483d0b6e9d703a844882db25dd61cdf
+ OPENSSL=3.2.1
+ OPENSSL_SHA256=83c7329fe52c850677d75e5d0b0ca245309b97e8ecbcfdc1dfdc4ab9fac35b39
+ PCRE=10.44

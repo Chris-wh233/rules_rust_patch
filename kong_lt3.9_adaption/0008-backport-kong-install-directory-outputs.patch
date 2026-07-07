@@ -1,0 +1,23 @@
+diff --git a/build/build_system.bzl b/build/build_system.bzl
+index 6a3673464..decb555ec 100644
+--- a/build/build_system.bzl
++++ b/build/build_system.bzl
+@@ -295,11 +295,16 @@ def _kong_install_impl(ctx):
+         #         f = output.path,
+         #     ),
+         # )
+-        output = ctx.actions.declare_file(full_path)
++        if file.is_directory:
++            output = ctx.actions.declare_directory(full_path)
++            src = file.path + "/."  # avoid duplicating the directory name
++        else:
++            output = ctx.actions.declare_file(full_path)
++            src = file.path
+         ctx.actions.run_shell(
+             outputs = [output],
+             inputs = [file],
+-            command = "cp -r %s %s" % (file.path, output.path),
++            command = "cp -r %s %s" % (src, output.path),
+         )
+ 
+         outputs.append(output)

@@ -1,0 +1,35 @@
+diff --git a/build/BUILD.bazel b/build/BUILD.bazel
+index 64ab51d59..f3b65abe7 100644
+--- a/build/BUILD.bazel
++++ b/build/BUILD.bazel
+@@ -242,6 +242,8 @@ kong_genrule(
+         "bin/luarocks",
+         "bin/luarocks-admin",
+         "etc/kong/kong.conf.default",
++    ],
++    out_dirs = [
+         "etc/luarocks",
+         "lib",
+         "share",
+diff --git a/build/build_system.bzl b/build/build_system.bzl
+index 8d46f71e6..3d49553f6 100644
+--- a/build/build_system.bzl
++++ b/build/build_system.bzl
+@@ -10,6 +10,9 @@ def _kong_genrule_impl(ctx):
+     for f in ctx.attr.outs:
+         outputs.append(ctx.actions.declare_file(KONG_VAR["BUILD_NAME"] + "/" + f))
+ 
++    for f in ctx.attr.out_dirs:
++        outputs.append(ctx.actions.declare_directory(KONG_VAR["BUILD_NAME"] + "/" + f))
++
+     env = dict(KONG_VAR)
+ 
+     # XXX: remove the "env" from KONG_VAR which is a list
+@@ -33,6 +36,7 @@ kong_genrule = rule(
+         "cmd": attr.string(),
+         "tools": attr.label_list(),
+         "outs": attr.string_list(),
++        "out_dirs": attr.string_list(),
+     },
+ )
+ 

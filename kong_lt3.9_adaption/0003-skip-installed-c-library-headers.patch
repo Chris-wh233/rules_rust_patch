@@ -1,0 +1,50 @@
+diff --git a/build/BUILD.bazel b/build/BUILD.bazel
+index 008a71ffc..83d48ac10 100644
+--- a/build/BUILD.bazel
++++ b/build/BUILD.bazel
+@@ -19,6 +19,8 @@ clib_deps = [
+     kong_install(
+         name = "install-%s" % get_workspace_name(k),
+         src = k,
++        # only install openssl headers
++        exclude = [] if k in ("@openssl",) else ["include"],
+         prefix = "kong/lib" if k in ("@passwdqc", "@snappy") else "kong",
+         strip_path = "snappy" if k == "@snappy" else "",
+     )
+diff --git a/build/build_system.bzl b/build/build_system.bzl
+index 99796a0c0..6a3673464 100644
+--- a/build/build_system.bzl
++++ b/build/build_system.bzl
+@@ -279,6 +279,15 @@ def _kong_install_impl(ctx):
+         if path.startswith(ctx.attr.src.label.workspace_name + "/copy_" + ctx.attr.src.label.name):
+             continue
+ 
++        # skip explictly excluded directories
++        should_skip = False
++        for e in ctx.attr.exclude:
++            if path.startswith(label_path + "/" + e):
++                should_skip = True
++                break
++        if should_skip:
++            continue
++
+         # only replace the first one
+         target_path = path.replace(strip_path + "/", "", 1)
+         full_path = "%s/%s%s" % (KONG_VAR["BUILD_NAME"], prefix, target_path)
+@@ -338,11 +347,11 @@ kong_install = rule(
+         #     doc = "List of files to explictly install, take effect after exclude; full name, or exactly one '*' at beginning or end as wildcard are supported",
+         #     default = [],
+         # ),
+-        # "exclude": attr.string_list(
+-        #     mandatory = False,
+-        #     doc = "List of directories to exclude from installation",
+-        #     default = [],
+-        # ),
++        "exclude": attr.string_list(
++            mandatory = False,
++            doc = "List of directories to exclude from installation",
++            default = [],
++        ),
+         "create_dynamic_library_symlink": attr.bool(
+             mandatory = False,
+             doc = "Create non versioned symlinks to the versioned so, e.g. libfoo.so -> libfoo.so.1.2.3",
